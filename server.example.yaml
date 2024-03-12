@@ -1,0 +1,6 @@
+name: server
+port: 8024
+token: tsrp
+mode: server
+
+proxies: []

@@ -1,0 +1,9 @@
+name: client
+port: 8024
+token: tsrp
+mode: client
+proxies:
+  - name: vpn-80
+    type: tcp
+    serverPort: 80
+    clientPort: 80

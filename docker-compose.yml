@@ -1,0 +1,8 @@
+version: '3'
+services:
+  tsrp:
+    image: ghcr.io/banknight/tsrp
+    container_name: tsrp
+    restart: always
+    ports:
+      - 8024:8024

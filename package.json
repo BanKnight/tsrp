@@ -1,0 +1,35 @@
+{
+  "name": "tsrp",
+  "version": "0.1.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "server.dev": "node --import tsx src/index.ts --config server.example.yaml",
+    "start": "node --env-file=.env --import tsx src/index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BanKnight/tsrp.git"
+  },
+  "keywords": [
+    "revers",
+    "proxy"
+  ],
+  "author": "bansky",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/BanKnight/tsrp/issues"
+  },
+  "homepage": "https://github.com/BanKnight/tsrp#readme",
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@commander-js/extra-typings": "^12.0.1",
+    "commander": "^12.0.0",
+    "tsx": "^4.7.1",
+    "typebuffer": "^0.1.2",
+    "yaml": "^2.4.0"
+  }
+}
