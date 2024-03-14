@@ -32,7 +32,7 @@ export const Connect = Types.Struct(SocketBase)
     .define("host", Types.L8String())
 
 export const Data = Types.Struct(SocketBase)
-    .define("data", Types.All())
+    .define("data", Types.L16BufferBE())
 
 export const Close = Types.Struct(SocketBase)
 

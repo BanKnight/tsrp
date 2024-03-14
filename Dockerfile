@@ -27,7 +27,7 @@ COPY --from=build-env /app /app
 WORKDIR /app
 
 # 暴露应用程序使用的端口（根据你的应用程序进行修改）
-EXPOSE 3000
+EXPOSE 8024
 
 # 运行应用程序,这里不加载env文件了，交给用户自己搞定
 CMD ["--import", "tsx", "src/index.ts"]

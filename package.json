@@ -6,7 +6,7 @@
   "scripts": {
     "server.dev": "node --import tsx src/index.ts --config server.example.yaml",
     "client.dev": "node --import tsx src/index.ts --config client.example.yaml",
-    "test": "node --import tsx src/test.ts"
+    "test": "node --import tsx test/tcp_connection.ts"
   },
   "repository": {
     "type": "git",

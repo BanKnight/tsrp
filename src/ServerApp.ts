@@ -112,12 +112,16 @@ export class ServerApp {
 
         const server = createServer()
 
+        server.setMaxListeners(10000)
+
         let idHelper = 0
 
         server.on("listening", () => {
             console.log(`socket[${info.socket}] from session[${session.name}] listen tcp ${info.port} ok`)
         })
 
+
+        let count = 0
         server.on("connection", (socket: Socket & { id: number }) => {
 
             socket.setKeepAlive(true)
@@ -141,11 +145,9 @@ export class ServerApp {
 
             socket.on("data", (data) => {
                 // console.log(data.toString("utf-8"))
-
                 let read = 0
-
                 while (read < data.length) {
-                    const len = Math.min(data.length - read, 65530)
+                    const len = Math.min(data.length - read, 65000)
                     session.send({
                         func: "data",
                         body: {
@@ -157,7 +159,7 @@ export class ServerApp {
             })
 
             shadow.on("data", (data: Buffer) => {
-                console.log(data.toString("utf-8"))
+                // console.log(data.toString("utf-8"))
                 if (socket.writable) {
                     socket.write(data)
                 }
@@ -176,14 +178,23 @@ export class ServerApp {
                     }
                 })
                 delete shadows[socket.id]
+
+                count--
+                console.log("close connection,count:", count)
             })
 
-            server.once("close", () => {
-                if (socket.destroyed) {
-                    return
-                }
-                socket.destroy()
-            })
+            count++
+
+            console.log("new connection,count:", count)
+
+
+            //Todo
+            // server.once("close", () => {
+            //     if (socket.destroyed) {
+            //         return
+            //     }
+            //     socket.destroy()
+            // })
         })
 
         server.on("error", (e: any) => {

@@ -28,7 +28,7 @@ export class Session extends EventEmitter {
         super()
 
         const recv = {
-            buffer: Buffer.alloc(65536),
+            buffer: Buffer.alloc(65536 * 2),
             read: 0,
             write: 0
         }
@@ -51,8 +51,8 @@ export class Session extends EventEmitter {
                 recv.write += chunk.copy(recv.buffer, recv.write)
             }
             else {
+                console.error(`${socket.remoteAddress}:${socket.remotePort},接收到超大的buffer，对端很危险，干掉对方`, chunk.length, recv.write, recv.read)
                 this.socket.destroy()
-                console.error(`${socket.remoteAddress}:${socket.remotePort},接收到超大的buffer，对端很危险，干掉对方`)
                 return
             }
 
@@ -75,10 +75,18 @@ export class Session extends EventEmitter {
 
                 recv.read += 2
 
-                try {
-                    const packet = Packet.read(recv)
+                const temp = {
+                    buffer: recv.buffer.subarray(recv.read, recv.read += len),
+                    read: 0,
+                    write: len
+                }
 
-                    // console.log("recv packet:" + JSON.stringify(packet))
+                try {
+                    const packet = Packet.read(temp)
+                    if (temp.read != temp.write) {
+                        console.log("recv packet:" + JSON.stringify({ cmd: packet.cmd, body: { func: packet.body.func } }))
+                        console.error("💀💀", "协议错误", len, temp.read, temp.write)
+                    }
 
                     switch (packet.cmd) {
                         case 0x01:
@@ -98,6 +106,7 @@ export class Session extends EventEmitter {
                 catch (e: any) {
                     console.error(e)
                     this.socket.destroy()
+                    break
                 }
             }
         })
@@ -122,6 +131,10 @@ export class Session extends EventEmitter {
             body: info
         }
         this.sendPacket(packet)
+
+        // if (info.func != "data") {
+        //     console.log("send packet:", JSON.stringify(packet))
+        // }
     }
 
     private sendPacket(packet: { cmd: number, body: any }) {
@@ -132,8 +145,6 @@ export class Session extends EventEmitter {
         context.write = 2
 
         Packet.write(context, null, packet)
-
-        // console.log("send packet:", JSON.stringify(packet))
 
         const len = context.write - 2
 
@@ -164,6 +175,11 @@ export class Session extends EventEmitter {
     }
 
     private async onSend(packet: { func: string, body: any }) {
+
+        if (packet.func != "data") {
+            console.log("recv packet", JSON.stringify(packet))
+        }
+
         this.emit(packet.func, packet.body)
     }
 

@@ -6,6 +6,7 @@ export interface Proxy {
     serverPort: number;
     clientPort: number;
     clientHost?: string;
+    timeout?: number;
 }
 
 export interface Config {

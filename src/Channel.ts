@@ -6,7 +6,7 @@ export class Channel extends EventEmitter {
     socket: number = 0
     config!: Proxy
 
-    socks: Record<number, ShadowSocket> = {}
+    socks = new Map<number, ShadowSocket>()
 
     constructor(proxy: Proxy) {
         super()

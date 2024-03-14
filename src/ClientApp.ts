@@ -77,7 +77,7 @@ export class ClientApp {
             client.port = body.port
             client.host = body.host
 
-            channel.socks[client.socket] = client
+            channel.socks.set(client.socket, client)
 
             const funcName = `proxy_${channel.config.type}`
             //@ts-ignore
@@ -100,7 +100,7 @@ export class ClientApp {
                 return
             }
 
-            const shadow = channel.socks[body.socket]
+            const shadow = channel.socks.get(body.socket)
             if (shadow == null) {
                 session.send({
                     func: "close",
@@ -111,9 +111,7 @@ export class ClientApp {
                 return
             }
 
-            // 因为有可能连接还没建立，但是数据过来了，此时需要保存一段时间
-            // 所以需要先拷贝走
-            shadow.emit("data", Buffer.from(body.data))
+            shadow.emit("data", body.data)
         })
 
         session.on("close", (body: { socket: number }) => {
@@ -122,12 +120,12 @@ export class ClientApp {
             if (channel == null) {
                 return
             }
-            const shadow = channel.socks[body.socket]
+            const shadow = channel.socks.get(body.socket)
             if (shadow == null) {
                 return
             }
             shadow.emit("close")
-            delete channel.socks[body.socket]
+            // channel.socks.delete(body.socket)
         })
     }
 
@@ -150,14 +148,22 @@ export class ClientApp {
         }
 
         target = createConnection({ host: channel.config.clientHost, port: channel.config.clientPort }, () => {
-            console.log("tcp connected", shadow.socket, channel.config.clientHost, channel.config.clientPort)
             connected = true
             flushTarget()
+
+            console.log("tcp connected", shadow.socket, channel.config.clientHost, channel.config.clientPort)
+            console.log("connection created,count:", channel.socks.size)
         })
 
         target.setKeepAlive(true)
         target.setNoDelay(true)
-        target.setTimeout(3000)
+
+        if (channel.config.timeout) {
+            target.setTimeout(channel.config.timeout)
+            target.once("timeout", () => {
+                target.destroySoon()
+            })
+        }
 
         target.on("error", (error) => {
             console.error(shadow.socket, channel.config.clientHost, channel.config.clientPort, error)
@@ -167,7 +173,7 @@ export class ClientApp {
         target.on("data", (data) => {
             let read = 0
             while (read < data.length) {
-                const len = Math.min(data.length - read, 65530)
+                const len = Math.min(data.length - read, 65000)
                 session.send({
                     func: "data",
                     body: {
@@ -179,17 +185,24 @@ export class ClientApp {
         })
 
         shadow.on("data", (data: Buffer) => {
+            // 因为有可能连接还没建立，但是数据过来了，此时需要保存一段时间
+            // 底层发上来的buffer会在下次被重用，所以要拷贝走
             if (shadow.pendings.length > 0 || !connected) {
-                shadow.pendings.push(data)
+                shadow.pendings.push(Buffer.from(data))
             }
             else {
                 target.write(data)
             }
         })
         shadow.once("close", () => {
+
+            channel.socks.delete(shadow.socket)
+            console.log("connection closed,count:", channel.socks.size)
+
             if (target.destroyed) {
                 return
             }
+
             target.destroySoon()
         })
 
@@ -201,14 +214,17 @@ export class ClientApp {
                 }
             })
 
+            shadow.emit("close")
+
             connected = false
 
             if (!target.destroyed) {
-                target.destroy()
+                target.destroySoon()
             }
         }
 
         finished(target, destroy)
+
         session.once("destroy", destroy)
     }
 
