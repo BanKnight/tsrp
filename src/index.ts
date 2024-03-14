@@ -3,7 +3,7 @@ import { ServerApp } from './ServerApp';
 import { parse } from "yaml";
 import { Config } from "./type";
 import { readFileSync } from "fs";
-import { join, resolve, basename, dirname } from "path";
+import { resolve } from "path";
 import { ClientApp } from './ClientApp';
 
 program
@@ -20,7 +20,6 @@ const config = parse(content) as Config
 const app = config.mode == "server" ? new ServerApp(config) : new ClientApp(config)
 
 app.start()
-
 
 
 

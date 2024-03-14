@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "server.dev": "node --import tsx src/index.ts --config server.example.yaml",
-    "start": "node --env-file=.env --import tsx src/index.ts"
+    "client.dev": "node --import tsx src/index.ts --config client.example.yaml",
+    "test": "node --import tsx src/test.ts"
   },
   "repository": {
     "type": "git",
@@ -29,7 +30,7 @@
     "@commander-js/extra-typings": "^12.0.1",
     "commander": "^12.0.0",
     "tsx": "^4.7.1",
-    "typebuffer": "^0.1.2",
+    "typebuffer": "^0.1.6",
     "yaml": "^2.4.0"
   }
 }

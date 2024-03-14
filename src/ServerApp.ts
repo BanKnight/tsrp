@@ -2,6 +2,8 @@ import { createSocket } from "dgram";
 import { Session } from "./Session";
 import { Config } from "./type";
 import { Server, Socket, createServer, createConnection } from "net";
+import { finished } from "stream";
+import { ShadowSocket } from "./ShadowSocket";
 
 export class ServerApp {
     server!: Server;
@@ -20,18 +22,35 @@ export class ServerApp {
 
             const session = new Session(socket)
 
+            session.setMaxListeners(10000)
+
             session.once("login", (info: { name: string, token: string }) => {
                 if (info.token != this.config.token) {
-                    session.close()
+                    console.log(`session[${info.name}] logined failed because of token error`)
+                    socket.destroySoon()
                     return
                 }
 
                 session.name = info.name
 
-                this.sessions[session.name] = session
-            })
+                const existed = this.sessions[session.name]
+                if (existed) {
+                    existed.socket.destroy()
+                    console.log(`conflict session[${info.name}] from ${session.socket.remoteAddress}:${session.socket.remotePort}`)
+                }
 
-            this.prepare(session)
+                this.sessions[session.name] = session
+
+                console.log(`session[${info.name}] logined from ${socket.remoteAddress}:${socket.remotePort}`)
+
+                finished(socket, () => {
+                    delete this.sessions[session.name]
+                    console.log(`session[${session.name}] from ${session.socket.remoteAddress}:${session.socket.remotePort} lost connection`)
+                    session.emit("destroy")
+                })
+
+                this.prepare(session)
+            })
         })
 
         this.server.on("error", (e: any) => {
@@ -42,27 +61,54 @@ export class ServerApp {
             }
         })
 
-        this.server.listen(this.config.port)
+        this.server.listen({
+            host: this.config.host ?? "0.0.0.0",
+            port: this.config.port,
+            backlog: 512
+        })
     }
 
     prepare(session: Session) {
 
-        session.on("listen", (info: { socket: number, port: number, protocol: "tcp" | "udp" }) => {
+        const shadows = {} as Record<number, ShadowSocket>
 
+        session.on("listen", (info: { socket: number, port: number, protocol: "tcp" | "udp" }) => {
             switch (info.protocol) {
                 case "tcp":
-                    this.listenTcp(session, info)
+                    this.listenTcp(session, shadows, info)
                     break
                 case "udp":
-                    this.listenUdp(session, info)
+                    this.listenUdp(session, shadows, info)
                     break
             }
-
         })
 
+        session.on("data", (body: { socket: number, data: Buffer }) => {
+            const shadow = shadows[body.socket]
+            if (shadow == null) {
+                session.send({
+                    func: "close",
+                    body: {
+                        socket: body.socket
+                    }
+                })
+                return
+            }
+            shadow.emit("data", body.data)
+        })
+
+        session.on("close", (body: { socket: number }) => {
+            const shadow = shadows[body.socket]
+            if (shadow == null) {
+                return
+            }
+            shadow.emit("close")
+
+            delete shadows[body.socket]
+        })
     }
 
-    listenTcp(session: Session, info: { socket: number, port: number }) {
+    listenTcp(session: Session, shadows: Record<number, ShadowSocket>, info: { socket: number, port: number }) {
 
         const server = createServer()
 
@@ -76,8 +122,12 @@ export class ServerApp {
 
             socket.setKeepAlive(true)
             socket.setNoDelay(true)
+            socket.setTimeout(3000)
 
             socket.id = info.socket * 10000000 + (++idHelper % 10000000)
+
+            const shadow = shadows[socket.id] = new ShadowSocket(session)
+            shadow.socket = socket.id
 
             session.send({
                 func: "accept",
@@ -90,22 +140,49 @@ export class ServerApp {
             })
 
             socket.on("data", (data) => {
-                session.send({
-                    func: "transfer",
-                    body: {
-                        socket: socket.id,
-                        data
-                    }
-                })
+                // console.log(data.toString("utf-8"))
+
+                let read = 0
+
+                while (read < data.length) {
+                    const len = Math.min(data.length - read, 65530)
+                    session.send({
+                        func: "data",
+                        body: {
+                            socket: socket.id,
+                            data: data.subarray(read, read += len)
+                        }
+                    })
+                }
             })
 
-            socket.on("close", () => {
+            shadow.on("data", (data: Buffer) => {
+                console.log(data.toString("utf-8"))
+                if (socket.writable) {
+                    socket.write(data)
+                }
+            })
+
+            shadow.once("close", () => {
+                socket.destroy()
+                delete shadows[socket.id]
+            })
+
+            finished(socket, () => {
                 session.send({
                     func: "close",
                     body: {
                         socket: socket.id,
                     }
                 })
+                delete shadows[socket.id]
+            })
+
+            server.once("close", () => {
+                if (socket.destroyed) {
+                    return
+                }
+                socket.destroy()
             })
         })
 
@@ -113,23 +190,27 @@ export class ServerApp {
 
             console.error(`socket[${info.socket}] from session[${session.name}] listen tcp ${info.port} error:${e}`)
 
-            setTimeout(server.close, 100)
+            setTimeout(server.close.bind(server), 100)
 
             if (e.code === 'EADDRINUSE') {
                 return
             }
         })
 
-        server.listen(info.port)
+        server.listen({
+            port: info.port,
+            host: "0.0.0.0",
+            backlog: 512
+        })
+
+        session.once("destroy", server.close.bind(server))
     }
 
-    listenUdp(session: Session, info: { socket: number, port: number }) {
+    listenUdp(session: Session, shadows: Record<number, ShadowSocket>, info: { socket: number, port: number }) {
 
         let idHelper = 0
 
-        type Client = { remoteAddress: string, remotePort: number, id: number }
-
-        const remotes = {} as Record<string, Client>
+        const remotes = {} as Record<string, ShadowSocket>
         const server = createSocket("udp4")
 
         server.on("listening", () => {
@@ -139,49 +220,50 @@ export class ServerApp {
         server.on('message', (message, remote_info) => {
 
             const address = `${remote_info.address}:${remote_info.port}`
-            let client = remotes[address]
 
-            if (client == null) {
-                client = {
-                    id: info.socket * 10000000 + (++idHelper % 10000000),
-                    remoteAddress: remote_info.address,
-                    remotePort: remote_info.port,
-                }
+            let shadow = remotes[address]
 
+            if (shadow) {
                 session.send({
-                    func: "accept",
+                    func: "data",
                     body: {
-                        socket: info.socket,
-                        remote: client.id,
-                        port: client.remotePort,
-                        host: client.remoteAddress
+                        socket: shadow.socket,
+                        data: message
                     }
                 })
+                return
             }
 
-            session.send({
-                func: "transfer",
-                body: {
-                    socket: client.id,
-                    data: message
-                }
+            const id = info.socket * 10000000 + (++idHelper % 10000000)
+
+            shadow = shadows[id] = remotes[address] = new ShadowSocket(session)
+
+            shadow.socket = id
+
+            shadow.on("data", (data: Buffer) => {
+                server.send(data, remote_info.port, remote_info.address)
             })
-        })
 
-        server.on("connection", (socket: Socket & { id: number }) => {
-
-            socket.setKeepAlive(true)
-            socket.setNoDelay(true)
-
-            socket.id = info.socket * 100 + ++idHelper
+            shadow.once("close", () => {
+                delete shadows[shadow!.socket]
+                delete remotes[address]
+            })
 
             session.send({
                 func: "accept",
                 body: {
                     socket: info.socket,
-                    remote: socket.id,
-                    port: socket.remotePort,
-                    host: socket.remoteAddress
+                    remote: id,
+                    port: remote_info.port,
+                    host: remote_info.address
+                }
+            })
+
+            session.send({
+                func: "data",
+                body: {
+                    socket: shadow.socket,
+                    data: message
                 }
             })
         })
@@ -190,7 +272,7 @@ export class ServerApp {
 
             console.error(`socket[${info.socket}] from session[${session.name}] listen[${info.port}] error:${e}`)
 
-            setTimeout(server.close, 100)
+            setTimeout(server.close.bind(server), 100)
 
             if (e.code === 'EADDRINUSE') {
                 return
@@ -198,5 +280,7 @@ export class ServerApp {
         })
 
         server.bind(info.port)
+
+        session.once("destroy", server.close.bind(server))
     }
 }

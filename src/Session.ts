@@ -17,132 +17,146 @@ export class Session extends EventEmitter {
     rpcs = {} as Record<number, Rpc>
 
     sendCtx: Context = {
-        buffer: Buffer.alloc(65536),
-        offset: 0,
+        read: 0,
+        buffer: Buffer.alloc(65536 + 12),
+        write: 0,
     }
 
     socks = {} as Record<number, ShadowSocket>
 
-    constructor(private socket: Duplex) {
+    constructor(public socket: Socket) {
         super()
 
-        const buffer = Buffer.alloc(65536 + 2)
-
         const recv = {
-            buffer: buffer.subarray(0),
-            offset: 0
+            buffer: Buffer.alloc(65536),
+            read: 0,
+            write: 0
         }
 
         this.socket.on("data", (chunk: Buffer) => {
 
-            const left = recv.buffer.length - recv.offset
+            const tailLeft = recv.buffer.length - recv.write
+            const totalLeft = recv.buffer.length - (recv.write - recv.read)
 
-            if (chunk.length > left) {
-                if (left + buffer.length - recv.buffer.length < chunk.length) {
+            // 末尾剩余的位置够，那么直接塞到后面去
+            if (chunk.length <= tailLeft) {
+                recv.write += chunk.copy(recv.buffer, recv.write)
+            }
+            else if (chunk.length <= totalLeft) {
+                //移动位置
+                recv.buffer.copy(recv.buffer, 0, recv.read, recv.write)
+                recv.write = recv.write - recv.read
+                recv.read = 0
+
+                recv.write += chunk.copy(recv.buffer, recv.write)
+            }
+            else {
+                this.socket.destroy()
+                console.error(`${socket.remoteAddress}:${socket.remotePort},接收到超大的buffer，对端很危险，干掉对方`)
+                return
+            }
+
+            while (true) {
+                const readable = recv.write - recv.read
+                if (readable < 4) {
+                    break
+                }
+
+                const len = recv.buffer.readUint16BE(recv.read)
+                if (len == 0) {     // 超支了，干掉
+                    console.error(`${socket.remoteAddress}:${socket.remotePort} 协议中的长度不正确，对端很危险，干掉对方：${len}`)
                     this.socket.destroy()
                     return
                 }
-                //移动位置
-                recv.buffer.copy(buffer, 0, 0, recv.offset)
-                recv.buffer = buffer.subarray(0)
-            }
 
-            chunk.copy(recv.buffer, recv.offset)
-
-            recv.offset += chunk.length
-
-            if (recv.offset < 4) {
-                return
-            }
-
-            const len = recv.buffer.readUint16BE()
-            if (recv.offset - 2 < len) {
-                return
-            }
-
-            const recvCtx = {
-                buffer: recv.buffer.subarray(2, 2 + len),
-                offset: 0
-            }
-
-            const packet = Packet.read(recvCtx)
-
-            switch (packet.cmd) {
-                case 0x01:
-                    this.onSend(packet.body)
+                if (readable - 2 < len) {       //等待数据
                     break
-                case 0x02:
-                    this.onCall(packet.body)
-                    break
-                case 0x03:
-                    this.onError(packet.body)
-                    break
-                case 0x04:
-                    this.onResp(packet.body)
-                    break
+                }
+
+                recv.read += 2
+
+                try {
+                    const packet = Packet.read(recv)
+
+                    // console.log("recv packet:" + JSON.stringify(packet))
+
+                    switch (packet.cmd) {
+                        case 0x01:
+                            this.onSend(packet.body)
+                            break
+                        case 0x02:
+                            this.onCall(packet.body)
+                            break
+                        case 0x03:
+                            this.onError(packet.body)
+                            break
+                        case 0x04:
+                            this.onResp(packet.body)
+                            break
+                    }
+                }
+                catch (e: any) {
+                    console.error(e)
+                    this.socket.destroy()
+                }
             }
         })
 
         finished(this.socket, () => {
-            this.emit("close")
+            this.emit("destroy")
         })
     }
 
-    close() {
+    destroy() {
         if (this.socket.destroyed) {
             return
         }
         this.socket.destroy()
-    }
 
-
-    async listen(info: { socket: number, port: number, protocol: "tcp" | "udp" }) {
-
-        this.send({
-            func: "listen",
-            body: info
-        })
-
+        this.emit("destroy")
     }
 
     send(info: { func: string, body: any }) {
+        const packet = {
+            cmd: 0x01,
+            body: info
+        }
+        this.sendPacket(packet)
+    }
+
+    private sendPacket(packet: { cmd: number, body: any }) {
 
         const context = this.sendCtx
 
-        const packet = {
-            cmd: 0x01,
-            send: info
-        }
-
-        context.offset = 2
+        context.read = 0
+        context.write = 2
 
         Packet.write(context, null, packet)
 
-        const len = context.offset - 2
+        // console.log("send packet:", JSON.stringify(packet))
+
+        const len = context.write - 2
 
         context.buffer.writeUint16BE(len)
 
-        this.socket.write(this.sendCtx.buffer.subarray(0, this.sendCtx.offset))
+        if (this.socket.writable) {
+            this.socket.write(context.buffer.subarray(0, context.write))
+        }
     }
 
     call(info: { func: string, body: any }) {
+
         const rpc = ++this.session
 
-        const context = this.sendCtx
         const packet = {
             cmd: 0x02,
-            call: info
+            body: {
+                session: rpc,
+                ...info
+            }
         }
 
-        context.offset = 2
-
-        Packet.write(context, null, packet)
-
-        const len = context.offset - 2
-
-        context.buffer.writeUint16BE(len)
-
-        this.socket.write(this.sendCtx.buffer.subarray(0, this.sendCtx.offset))
+        this.sendPacket(packet)
 
         return new Promise((resolve, reject) => {
             this.rpcs[rpc] = { resolve, reject }
@@ -150,19 +164,7 @@ export class Session extends EventEmitter {
     }
 
     private async onSend(packet: { func: string, body: any }) {
-
-        const events = this.listeners(packet.func)
-
-        if (events.length == 0) {
-            return
-        }
-
-        let result
-        for (const func of events) {
-            result = await func(packet.body)
-        }
-
-        return result
+        this.emit(packet.func, packet.body)
     }
 
     private async onCall(packet: { session: number, func: string, body: any }) {
@@ -187,25 +189,16 @@ export class Session extends EventEmitter {
 
     private error(info: { session: number, body: any }) {
 
-        const context = this.sendCtx
-
         const packet = {
             cmd: 0x03,
             body: info
         }
 
-        context.offset = 2
-
-        Packet.write(context, null, packet)
-
-        const len = context.offset - 2
-
-        context.buffer.writeUint16BE(len)
-
-        this.socket.write(this.sendCtx.buffer.subarray(0, this.sendCtx.offset))
+        this.sendPacket(packet)
     }
 
     private onError(packet: { session: number, error: any }) {
+
         const rpc = this.rpcs[packet.session]
         if (rpc == null) {
             return
@@ -217,23 +210,12 @@ export class Session extends EventEmitter {
     }
 
     private response(info: { session: number, body: any }) {
-
-        const context = this.sendCtx
-
         const packet = {
             cmd: 0x04,
             body: info
         }
 
-        context.offset = 2
-
-        Packet.write(context, null, packet)
-
-        const len = context.offset - 2
-
-        context.buffer.writeUint16BE(len)
-
-        this.socket.write(this.sendCtx.buffer.subarray(0, this.sendCtx.offset))
+        this.sendPacket(packet)
     }
 
     private onResp(packet: { session: number, body: any }) {

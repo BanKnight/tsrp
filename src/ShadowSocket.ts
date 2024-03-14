@@ -6,6 +6,8 @@ export class ShadowSocket extends EventEmitter {
     host: string = ""
     port: number = 0
 
+    pendings = [] as Array<Buffer>
+
     constructor(private session: Session) {
         super()
     }

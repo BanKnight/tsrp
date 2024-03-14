@@ -1,9 +1,11 @@
 name: client
+host: 127.0.0.1
 port: 8024
 token: tsrp
 mode: client
 proxies:
   - name: vpn-80
-    type: tcp
+    type: udp
     serverPort: 80
-    clientPort: 80
+    clientHost: 192.168.31.254
+    clientPort: 8084
