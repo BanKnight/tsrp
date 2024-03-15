@@ -135,10 +135,16 @@ export class ClientApp {
         let target: Socket
 
         function flushTarget() {
-            const buffer = shadow.pendings.shift()
+            const buffer = shadow.pendings[0]
             if (buffer == null) {
                 return
             }
+
+            if (!target.writable) {
+                return
+            }
+
+            shadow.pendings.shift()
 
             target.write(buffer)
 
@@ -150,9 +156,7 @@ export class ClientApp {
         target = createConnection({ host: channel.config.clientHost, port: channel.config.clientPort }, () => {
             connected = true
             flushTarget()
-
-            console.log("tcp connected", shadow.socket, channel.config.clientHost, channel.config.clientPort)
-            console.log("connection created,count:", channel.socks.size)
+            console.log(shadow.socket, "target tcp connected", channel.config.clientHost, channel.config.clientPort)
         })
 
         target.setKeepAlive(true)
@@ -166,7 +170,7 @@ export class ClientApp {
         }
 
         target.on("error", (error) => {
-            console.error(shadow.socket, channel.config.clientHost, channel.config.clientPort, error)
+            // console.error(shadow.socket, channel.config.clientHost, channel.config.clientPort, error)
             target.destroySoon()
         })
 
@@ -194,27 +198,21 @@ export class ClientApp {
                 target.write(data)
             }
         })
-        shadow.once("close", () => {
-
-            channel.socks.delete(shadow.socket)
-            console.log("connection closed,count:", channel.socks.size)
-
-            if (target.destroyed) {
-                return
-            }
-
-            target.destroySoon()
-        })
 
         const destroy = () => {
+
+            session.off("destroy", destroy)
+            shadow.off("close", destroy)
+
+            shadow.emit("close")
+            channel.socks.delete(shadow.socket)
+
             session.send({
                 func: "close",
                 body: {
                     socket: shadow.socket
                 }
             })
-
-            shadow.emit("close")
 
             connected = false
 
@@ -225,6 +223,7 @@ export class ClientApp {
 
         finished(target, destroy)
 
+        shadow.once("close", destroy)
         session.once("destroy", destroy)
     }
 
@@ -248,8 +247,29 @@ export class ClientApp {
 
         target.connect(channel.config.clientPort, channel.config.clientHost, () => {
             connected = true
-            console.log("udp connected", channel.config.clientPort, channel.config.clientHost)
             flushTarget()
+            console.log("udp connected", channel.config.clientPort, channel.config.clientHost)
+        })
+
+        let recvTime = Date.now()
+        let timer: NodeJS.Timeout | undefined
+
+        if (channel.config.timeout) {
+            timer = setInterval(() => {
+                if (Date.now() - recvTime > channel.config.timeout!) {
+                    target.emit("timeout")
+                }
+            }, channel.config.timeout)
+
+            target.once("timeout", () => {
+                if (connected) {
+                    target.close()
+                }
+            })
+        }
+
+        target.on("error", () => {
+            target.close()
         })
 
         target.on("message", (data) => {
@@ -262,12 +282,20 @@ export class ClientApp {
             })
         })
 
-        target.on("error", () => {
-            target.close()
+        shadow.on("data", (data: Buffer) => {
+            // 因为有可能连接还没建立，但是数据过来了，此时需要保存一段时间
+            // 底层发上来的buffer会在下次被重用，所以要拷贝走
+            if (shadow.pendings.length > 0 || !connected) {
+                shadow.pendings.push(Buffer.from(data))
+            }
+            else {
+                target.send(data)
+            }
         })
 
-        target.once("close", () => {
-            connected = false
+        const destroy = () => {
+
+            channel.socks.delete(shadow.socket)
 
             session.send({
                 func: "close",
@@ -275,23 +303,19 @@ export class ClientApp {
                     socket: shadow.socket
                 }
             })
-        })
 
-        shadow.on("data", (data: Buffer) => {
-            if (shadow.pendings.length > 0 || !connected) {
-                shadow.pendings.push(data)
+            session.off("destroy", destroy)
+            shadow.off("close", destroy)
+            shadow.emit("close")
+
+            if (connected) {
+                connected = false
+                target.close()
             }
-            else {
-                target.send(data)
-            }
-        })
+        }
 
-        shadow.once("close", () => {
-            target.close()
-        })
-
-        session.once("destroy", () => {
-            target.close()
-        })
+        target.once("close", destroy)
+        shadow.once("close", destroy)
+        session.once("destroy", destroy)
     }
 }

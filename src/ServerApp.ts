@@ -103,8 +103,8 @@ export class ServerApp {
             if (shadow == null) {
                 return
             }
-            shadow.emit("close")
 
+            shadow.emit("close")
             delete shadows[body.socket]
         })
     }
@@ -116,14 +116,16 @@ export class ServerApp {
         server.setMaxListeners(10000)
 
         let idHelper = 0
+        let count = 0
 
         server.on("listening", () => {
             console.log(`socket[${info.socket}] from session[${session.name}] listen tcp ${info.port} ok`)
         })
 
-
-        let count = 0
         server.on("connection", (socket: Socket & { id: number }) => {
+
+            count++
+            console.log(count, "new tcp connection", socket.remoteAddress, socket.remotePort)
 
             socket.setKeepAlive(true)
             socket.setNoDelay(true)
@@ -166,36 +168,42 @@ export class ServerApp {
                 }
             })
 
-            shadow.once("close", () => {
-                socket.destroy()
-                delete shadows[socket.id]
+            socket.once("error", () => {
+                socket.destroySoon()
             })
 
-            finished(socket, () => {
+            socket.once("close", () => {
+                count--
+                console.log(count, "close tcp connection", socket.remoteAddress, socket.remotePort)
+            })
+
+            const destroy = () => {
+
+                shadow.off("close", destroy)
+                server.off("close", destroy)
+                socket.off("close", destroy)
+
+                shadow.emit("close")
+
+                delete shadows[socket.id]
+
                 session.send({
                     func: "close",
                     body: {
                         socket: socket.id,
                     }
                 })
-                delete shadows[socket.id]
 
-                count--
-                console.log("close connection,count:", count)
-            })
+                if (!socket.destroyed) {
+                    socket.destroySoon()
+                    return
+                }
+            }
 
-            count++
+            finished(socket, destroy)
 
-            console.log("new connection,count:", count)
-
-
-            //Todo
-            // server.once("close", () => {
-            //     if (socket.destroyed) {
-            //         return
-            //     }
-            //     socket.destroy()
-            // })
+            shadow.once("close", destroy)
+            server.once("close", destroy)
         })
 
         server.on("error", (e: any) => {
@@ -221,9 +229,12 @@ export class ServerApp {
     listenUdp(session: Session, shadows: Record<number, ShadowSocket>, info: { socket: number, port: number }) {
 
         let idHelper = 0
+        let count = 0
 
         const remotes = {} as Record<string, ShadowSocket>
         const server = createSocket("udp4")
+
+        server.setMaxListeners(10000)
 
         server.on("listening", () => {
             console.log(`socket[${info.socket}] from session[${session.name}] listen udp ${info.port} ok`)
@@ -246,20 +257,14 @@ export class ServerApp {
                 return
             }
 
+            count++
+            console.log("new udp connection,count:", count)
+
             const id = info.socket * 10000000 + (++idHelper % 10000000)
 
             shadow = shadows[id] = remotes[address] = new ShadowSocket(session)
 
             shadow.socket = id
-
-            shadow.on("data", (data: Buffer) => {
-                server.send(data, remote_info.port, remote_info.address)
-            })
-
-            shadow.once("close", () => {
-                delete shadows[shadow!.socket]
-                delete remotes[address]
-            })
 
             session.send({
                 func: "accept",
@@ -278,6 +283,18 @@ export class ServerApp {
                     data: message
                 }
             })
+
+            shadow.on("data", (data: Buffer) => {
+                server.send(data, remote_info.port, remote_info.address)
+            })
+
+            shadow.once("close", () => {
+                delete shadows[shadow!.socket]
+                delete remotes[address]
+
+                count--
+                console.log("udp connection closed ,count:", count)
+            })
         })
 
         server.on("error", (e: any) => {
@@ -286,6 +303,8 @@ export class ServerApp {
 
             setTimeout(server.close.bind(server), 100)
 
+            session.off("destroy", closeServer)
+
             if (e.code === 'EADDRINUSE') {
                 return
             }
@@ -293,6 +312,11 @@ export class ServerApp {
 
         server.bind(info.port)
 
-        session.once("destroy", server.close.bind(server))
+        const closeServer = () => {
+            server.close()
+            session.off("destroy", closeServer)
+        }
+
+        session.once("destroy", closeServer)
     }
 }

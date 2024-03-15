@@ -66,7 +66,7 @@ export class Session extends EventEmitter {
                 return
             }
 
-            const packets = []
+            // const packets = []
 
             while (true) {
 
@@ -86,11 +86,11 @@ export class Session extends EventEmitter {
                     break
                 }
 
-                packets.push({
-                    read: recv.read,
-                    len,
-                    buffer: recv.buffer.subarray(recv.read, recv.read + len + 2),
-                })
+                // packets.push({
+                //     read: recv.read,
+                //     len,
+                //     buffer: recv.buffer.subarray(recv.read, recv.read + len + 2),
+                // })
 
                 recv.read += 2
 
@@ -105,11 +105,13 @@ export class Session extends EventEmitter {
                 try {
                     const packet = Packet.read(temp)
 
-                    console.log(packet.index, "recv packet:", packet.cmd, packet.body.func, packet.body.body?.socket, len + 2)
+                    if (process.env.DEBUG) {
+                        console.log(packet.index, "recv packet:", packet.cmd, packet.body.func, packet.body.body?.socket, len + 2)
+                    }
 
                     if (temp.read != temp.write) {
                         console.log("recv packet:" + JSON.stringify({ cmd: packet.cmd, body: { func: packet.body.func } }))
-                        console.error("💀💀", "协议错误", len, temp.read, temp.write)
+                        throw new Error(`💀💀 协议错误,${len}, ${temp.read}, ${temp.write}`)
                     }
 
                     switch (packet.cmd) {
@@ -145,7 +147,6 @@ export class Session extends EventEmitter {
             return
         }
         this.socket.destroy()
-
         this.emit("destroy")
     }
 
@@ -168,7 +169,6 @@ export class Session extends EventEmitter {
         this.sendCtx.read = 0
 
         return this.sendCtx
-
     }
 
     private sendPacket(packet: { index?: number, cmd: number, body: any }) {
@@ -194,11 +194,13 @@ export class Session extends EventEmitter {
 
         remain.writeUint16BE(len, context.read)
 
-        if (packet.body.func != "data") {
-            console.log(packet.index, "send packet", packet.cmd, packet.body.func, packet.body.body?.socket, context.write)
-        }
-        else {
-            console.log(packet.index, "send packet", packet.cmd, packet.body.func, packet.body.body?.socket, context.write, packet.body.body.data.length)
+        if (process.env.DEBUG) {
+            if (packet.body.func != "data") {
+                console.log(packet.index, "send packet", packet.cmd, packet.body.func, packet.body.body?.socket, context.write)
+            }
+            else {
+                console.log(packet.index, "send packet", packet.cmd, packet.body.func, packet.body.body?.socket, context.write, packet.body.body.data.length)
+            }
         }
 
         const value = this.socket.write(remain.subarray(context.read, context.write))
@@ -230,10 +232,6 @@ export class Session extends EventEmitter {
     }
 
     private async onSend(packet: { func: string, body: any }) {
-
-        // if (packet.func != "data") {
-        //     console.log("recv packet", JSON.stringify(packet))
-        // }
 
         this.emit(packet.func, packet.body)
     }

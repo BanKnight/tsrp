@@ -4,7 +4,12 @@ port: 8024
 token: tsrp
 mode: client
 proxies:
-  - name: vpn-80
+  - name: udp-1081
+    type: udp
+    serverPort: 1081
+    clientHost: 127.0.0.1
+    clientPort: 1080
+  - name: tcp-1081
     type: tcp
     serverPort: 1081
     clientHost: 127.0.0.1

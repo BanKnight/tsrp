@@ -6,7 +6,8 @@
   "scripts": {
     "server.dev": "node --import tsx src/index.ts --config server.example.yaml",
     "client.dev": "node --import tsx src/index.ts --config client.example.yaml",
-    "test": "node --import tsx test/tcp_connection.ts"
+    "tcp.test": "node --import tsx test/tcp.ts",
+    "udp.test": "node --import tsx test/udp.ts"
   },
   "repository": {
     "type": "git",

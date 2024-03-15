@@ -1,16 +1,28 @@
 import { exit } from "process"
 import { config } from "./config"
 import { createConnection, createServer, Socket } from "net"
+import { Proxy } from "~/type"
 
 // 测试多个链接，多发包
-const proxy = config.proxies[0]!
+let proxy: Proxy | undefined
+
+for (const one of config.proxies) {
+    if (one.type == "tcp") {
+        proxy = one
+        break
+    }
+}
+
+if (proxy == null) {
+    exit(1)
+}
 
 // 收到的字节数
-const maxCount = 65535 * 150
+const maxCount = 65535 * 200
 
 const every = 51200     // 512
 // 多少个客户端
-const maxClient = 100
+const maxClient = 20
 
 console.log("client host", proxy.clientHost, "random count is:", maxCount)
 
@@ -19,7 +31,7 @@ console.log("client host", proxy.clientHost, "random count is:", maxCount)
     server.setMaxListeners(10000)
 
     server.on("listening", () => {
-        console.log(`listen`, proxy.clientPort)
+        console.log(`listen`, proxy!.clientPort)
     })
 
     let totalCount = 0
@@ -41,15 +53,15 @@ console.log("client host", proxy.clientHost, "random count is:", maxCount)
             // socket.write(data)
         })
 
-        let i = clientCount - 1
+        let index = clientCount
         socket.once("close", () => {
             activeCount--
 
             if (count != maxCount) {
-                console.error(i, "done,but count not ok", count, maxCount)
+                console.error(index, "done,but count not ok", count, maxCount)
             }
             else {
-                console.log(i, "done ok", count)
+                console.log(index, "done ok", count)
             }
 
             if (activeCount == 0) {
@@ -74,7 +86,7 @@ console.log("client host", proxy.clientHost, "random count is:", maxCount)
             console.log("connected", client.remoteAddress, client.remotePort)
 
             let count = 0
-            let index = 97 + i
+            let index = i + 1
 
             //@ts-ignore
             const timer = setInterval(() => {
@@ -85,14 +97,14 @@ console.log("client host", proxy.clientHost, "random count is:", maxCount)
 
                 const len = Math.min(Math.floor(every + Math.random() * 100), maxCount - count)
 
-                const buffer = Buffer.alloc(len, index)
+                const buffer = Buffer.alloc(len, (97 + i) % 255)
                 client.write(buffer)
 
                 count += len
                 totalCount += len
 
                 if (count == maxCount) {
-                    console.log(i, "sent count", count, "began to end")
+                    console.log(index, "sent count", count, "began to end")
                     client.end(() => {
                         client.destroySoon()
                     })
