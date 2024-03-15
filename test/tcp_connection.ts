@@ -2,15 +2,15 @@ import { exit } from "process"
 import { config } from "./config"
 import { createConnection, createServer, Socket } from "net"
 
-// 测试单个链接，多发包
+// 测试多个链接，多发包
 const proxy = config.proxies[0]!
 
 // 收到的字节数
-const maxCount = 65536 * 200
+const maxCount = 65535 * 150
 
-const every = Math.floor(maxCount / 10)
+const every = 51200     // 512
 // 多少个客户端
-const maxClient = 2
+const maxClient = 100
 
 console.log("client host", proxy.clientHost, "random count is:", maxCount)
 
@@ -74,6 +74,7 @@ console.log("client host", proxy.clientHost, "random count is:", maxCount)
             console.log("connected", client.remoteAddress, client.remotePort)
 
             let count = 0
+            let index = 97 + i
 
             //@ts-ignore
             const timer = setInterval(() => {
@@ -82,9 +83,9 @@ console.log("client host", proxy.clientHost, "random count is:", maxCount)
                     return
                 }
 
-                const len = Math.min(every, maxCount - count)
+                const len = Math.min(Math.floor(every + Math.random() * 100), maxCount - count)
 
-                const buffer = Buffer.allocUnsafe(len)
+                const buffer = Buffer.alloc(len, index)
                 client.write(buffer)
 
                 count += len
@@ -96,7 +97,7 @@ console.log("client host", proxy.clientHost, "random count is:", maxCount)
                         client.destroySoon()
                     })
                 }
-            }, 1000)
+            }, 100)
         })
 
         client.setKeepAlive(true)

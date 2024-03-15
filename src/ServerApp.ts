@@ -94,6 +94,7 @@ export class ServerApp {
                 })
                 return
             }
+            //由于很快就发走，不用考虑拷贝
             shadow.emit("data", body.data)
         })
 
@@ -147,7 +148,7 @@ export class ServerApp {
                 // console.log(data.toString("utf-8"))
                 let read = 0
                 while (read < data.length) {
-                    const len = Math.min(data.length - read, 65000)
+                    const len = Math.min(data.length - read, 63000)
                     session.send({
                         func: "data",
                         body: {

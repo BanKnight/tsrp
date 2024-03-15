@@ -173,7 +173,7 @@ export class ClientApp {
         target.on("data", (data) => {
             let read = 0
             while (read < data.length) {
-                const len = Math.min(data.length - read, 65000)
+                const len = Math.min(data.length - read, 63000)
                 session.send({
                     func: "data",
                     body: {

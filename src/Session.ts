@@ -1,9 +1,9 @@
-import { Duplex, finished } from "stream";
-import { Server, Socket, createServer, createConnection } from "net";
+import { finished } from "stream";
+import { Socket } from "net";
 import { Context } from "typebuffer";
 import { Packet } from "./proto";
 import EventEmitter from "events";
-import { ShadowSocket, ShadowServer } from "./ShadowSocket";
+import { ShadowSocket } from "./ShadowSocket";
 
 type Resolve = (value: any) => void
 type Reject = (reason?: any) => void
@@ -17,36 +17,46 @@ export class Session extends EventEmitter {
     rpcs = {} as Record<number, Rpc>
 
     sendCtx: Context = {
+        buffer: Buffer.allocUnsafe(65536 * 2),
         read: 0,
-        buffer: Buffer.alloc(65536 + 12),
         write: 0,
     }
 
     socks = {} as Record<number, ShadowSocket>
 
+    sent = 0        //发送的包的个数
+    recv = 0        //接收的包的个数
+
     constructor(public socket: Socket) {
         super()
 
         const recv = {
-            buffer: Buffer.alloc(65536 * 2),
+            buffer: Buffer.allocUnsafe(65536 * 2),
             read: 0,
             write: 0
         }
 
         this.socket.on("data", (chunk: Buffer) => {
 
+            const dataLeft = recv.write - recv.read
             const tailLeft = recv.buffer.length - recv.write
-            const totalLeft = recv.buffer.length - (recv.write - recv.read)
+            const totalLeft = recv.buffer.length - dataLeft
 
             // 末尾剩余的位置够，那么直接塞到后面去
             if (chunk.length <= tailLeft) {
                 recv.write += chunk.copy(recv.buffer, recv.write)
             }
             else if (chunk.length <= totalLeft) {
-                //移动位置
-                recv.buffer.copy(recv.buffer, 0, recv.read, recv.write)
-                recv.write = recv.write - recv.read
-                recv.read = 0
+
+                if (dataLeft > 0) {
+                    //移动位置
+                    recv.buffer.copyWithin(0, recv.read, recv.write)
+                    recv.write = dataLeft
+                    recv.read = 0
+                }
+                else {
+                    recv.read = recv.write = 0
+                }
 
                 recv.write += chunk.copy(recv.buffer, recv.write)
             }
@@ -56,7 +66,10 @@ export class Session extends EventEmitter {
                 return
             }
 
+            const packets = []
+
             while (true) {
+
                 const readable = recv.write - recv.read
                 if (readable < 4) {
                     break
@@ -73,6 +86,12 @@ export class Session extends EventEmitter {
                     break
                 }
 
+                packets.push({
+                    read: recv.read,
+                    len,
+                    buffer: recv.buffer.subarray(recv.read, recv.read + len + 2),
+                })
+
                 recv.read += 2
 
                 const temp = {
@@ -81,8 +100,13 @@ export class Session extends EventEmitter {
                     write: len
                 }
 
+                this.recv++
+
                 try {
                     const packet = Packet.read(temp)
+
+                    console.log(packet.index, "recv packet:", packet.cmd, packet.body.func, packet.body.body?.socket, len + 2)
+
                     if (temp.read != temp.write) {
                         console.log("recv packet:" + JSON.stringify({ cmd: packet.cmd, body: { func: packet.body.func } }))
                         console.error("💀💀", "协议错误", len, temp.read, temp.write)
@@ -131,28 +155,59 @@ export class Session extends EventEmitter {
             body: info
         }
         this.sendPacket(packet)
-
-        // if (info.func != "data") {
-        //     console.log("send packet:", JSON.stringify(packet))
-        // }
     }
 
-    private sendPacket(packet: { cmd: number, body: any }) {
+    private checkBuffer() {
+        const tailLength = this.sendCtx.buffer.length - this.sendCtx.write
+        if (tailLength >= this.sendCtx.buffer.length * 0.5) {   //空间足够
+            return this.sendCtx
+        }
 
-        const context = this.sendCtx
+        this.sendCtx.buffer = Buffer.allocUnsafe(this.sendCtx.buffer.length)
+        this.sendCtx.write = 0
+        this.sendCtx.read = 0
 
-        context.read = 0
-        context.write = 2
+        return this.sendCtx
+
+    }
+
+    private sendPacket(packet: { index?: number, cmd: number, body: any }) {
+
+        if (!this.socket.writable) {
+            return
+        }
+
+        this.sent++
+
+        //@ts-ignore
+        packet.index = this.sent
+
+        const context = this.checkBuffer()
+        const remain = context.buffer
+
+        context.read = context.write
+        context.write += 2      // len position
 
         Packet.write(context, null, packet)
 
-        const len = context.write - 2
+        const len = context.write - context.read - 2
 
-        context.buffer.writeUint16BE(len)
+        remain.writeUint16BE(len, context.read)
 
-        if (this.socket.writable) {
-            this.socket.write(context.buffer.subarray(0, context.write))
+        if (packet.body.func != "data") {
+            console.log(packet.index, "send packet", packet.cmd, packet.body.func, packet.body.body?.socket, context.write)
         }
+        else {
+            console.log(packet.index, "send packet", packet.cmd, packet.body.func, packet.body.body?.socket, context.write, packet.body.body.data.length)
+        }
+
+        const value = this.socket.write(remain.subarray(context.read, context.write))
+
+        if (!value) {
+            return
+        }
+
+        context.write = context.read
     }
 
     call(info: { func: string, body: any }) {
@@ -176,9 +231,9 @@ export class Session extends EventEmitter {
 
     private async onSend(packet: { func: string, body: any }) {
 
-        if (packet.func != "data") {
-            console.log("recv packet", JSON.stringify(packet))
-        }
+        // if (packet.func != "data") {
+        //     console.log("recv packet", JSON.stringify(packet))
+        // }
 
         this.emit(packet.func, packet.body)
     }
