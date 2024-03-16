@@ -1,0 +1,12 @@
+**/node_modules/
+**/dist
+.vscode/
+.github
+.git
+npm-debug.log
+.coverage
+.coverage.*
+.env
+.aws
+*.md
+*.example.yaml

@@ -14,3 +14,8 @@ proxies:
     serverPort: 1081
     clientHost: 127.0.0.1
     clientPort: 1080
+  # - name: tcp-1080
+  #   type: tcp
+  #   serverPort: 1080
+  #   clientHost: 192.168.31.252
+  #   clientPort: 1080

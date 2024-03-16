@@ -7,7 +7,6 @@ RUN apt-get update && \
     libjemalloc2 && \
     rm -rf /var/lib/apt/lists/*
 
-
 COPY . /app
 # 设置工作目录
 WORKDIR /app
@@ -30,4 +29,4 @@ WORKDIR /app
 EXPOSE 8024
 
 # 运行应用程序,这里不加载env文件了，交给用户自己搞定
-CMD ["--import", "tsx", "src/index.ts"]
+ENTRYPOINT ["--import", "tsx", "src/index.ts"]
