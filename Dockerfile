@@ -29,4 +29,4 @@ WORKDIR /app
 EXPOSE 8024
 
 # 运行应用程序,这里不加载env文件了，交给用户自己搞定
-ENTRYPOINT ["node","--import", "tsx", "src/index.ts"]
+ENTRYPOINT ["/nodejs/bin/node","--import", "tsx", "src/index.ts"]
