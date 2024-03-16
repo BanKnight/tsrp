@@ -8,5 +8,3 @@ services:
     volumes:
       - ./client.yaml:/app/config.yaml:ro
       - /etc/localtime:/etc/localtime:ro
-    ports:
-      - 8024:8024
