@@ -1,9 +1,12 @@
 version: '3'
 services:
   tsrp:
-    image: ghcr.io/banknight/tsrp
+    image: ghcr.io/banknight/tsrp:master
     container_name: tsrp
     restart: always
     network_mode: host
+    volumes:
+      - ./client.yaml:/app/config.yaml:ro
+      - /etc/localtime:/etc/localtime:ro
     ports:
       - 8024:8024
