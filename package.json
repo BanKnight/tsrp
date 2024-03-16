@@ -7,7 +7,9 @@
     "server.dev": "node --import tsx src/index.ts --config server.example.yaml",
     "client.dev": "node --import tsx src/index.ts --config client.example.yaml",
     "tcp.test": "node --import tsx test/tcp.ts",
-    "udp.test": "node --import tsx test/udp.ts"
+    "tcp-reverse.test": "node --import tsx test/tcp-reverse.ts",
+    "udp.test": "node --import tsx test/udp.ts",
+    "udp-reverse.test": "node --import tsx test/udp-reverse.ts"
   },
   "repository": {
     "type": "git",

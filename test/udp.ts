@@ -20,7 +20,7 @@ if (proxy == null) {
 }
 
 // 收到的字节数
-const maxCount = 65535 * 10
+const maxCount = 65535 * 300
 
 const every = 1400     // 512
 // 多少个客户端

@@ -22,7 +22,7 @@ const maxCount = 65535 * 200
 
 const every = 51200     // 512
 // 多少个客户端
-const maxClient = 20
+const maxClient = 300
 
 console.log("client host", proxy.clientHost, "random count is:", maxCount)
 

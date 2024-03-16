@@ -258,7 +258,7 @@ export class ServerApp {
             }
 
             count++
-            console.log("new udp connection,count:", count)
+            console.log(count, "new udp connection,count:", remote_info.address, remote_info.port)
 
             const id = info.socket * 10000000 + (++idHelper % 10000000)
 
