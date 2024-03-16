@@ -20,7 +20,7 @@ if (proxy == null) {
 }
 
 // 收到的字节数
-const maxCount = 65535 * 300
+const maxCount = 65535 * 100
 
 const every = 1400     // 512
 // 多少个客户端
@@ -74,19 +74,25 @@ console.log("client host", proxy.clientHost, "random count is:", maxCount)
             totalCount += data.length
 
             if (count == maxCount) {
-                console.log(i, "done ok", count)
-                client!.removeAllListeners()
-                delete clients[address]
-                activeCount--
+                client?.emit("close")
             }
+        })
+
+        client.emit("data", message)
+
+        client.once("close", () => {
+            activeCount--
+            delete clients[address]
+
+            client!.removeAllListeners()
+
+            console.log(i, "done ok", count, activeCount)
 
             if (activeCount == 0) {
                 console.log("done,recv:", clientCount, "target:", totalCount, "client count", maxClient * maxCount)
                 exit(1)
             }
         })
-
-        client.emit("data", message)
     })
 
     setInterval(() => {
@@ -131,13 +137,13 @@ console.log("client host", proxy.clientHost, "random count is:", maxCount)
                         client.close()
                     })
                 }
-            }, 100)
+            }, 10)
         })
     }
 
     setInterval(() => {
         console.log("sent count:", totalCount)
-    }, 1000)
+    }, 2000)
 }
 
 

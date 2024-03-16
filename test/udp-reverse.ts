@@ -19,11 +19,11 @@ if (proxy == null) {
 }
 
 // 收到的字节数
-const maxCount = 65535 * 50
+const maxCount = 65535 * 200
 
 const every = 1400     // udp 保持1400比较安全
 // 多少个客户端
-const maxClient = 100
+const maxClient = 30
 
 console.log("client host", proxy.clientHost, "random count is:", maxCount)
 
@@ -83,7 +83,7 @@ console.log("client host", proxy.clientHost, "random count is:", maxCount)
 
                 sentCount += len
                 totalSent += len
-            }, 100)
+            }, 10)
 
             client.on("message", (message) => {
                 totalRecv += message.length
@@ -97,9 +97,8 @@ console.log("client host", proxy.clientHost, "random count is:", maxCount)
             })
 
             client.once("close", () => {
-                console.log(index, "done ok,recv", recvCount)
                 activeCount--
-
+                console.log(index, "done ok,recv", recvCount, activeCount)
                 client!.removeAllListeners()
 
                 if (activeCount == 0) {
@@ -112,7 +111,7 @@ console.log("client host", proxy.clientHost, "random count is:", maxCount)
 
     setInterval(() => {
         console.log("😎 client:", "totalSent:", totalSent, "totalRecv:", totalRecv, "target", maxClient * maxCount)
-    }, 1000)
+    }, 2000)
 }
 
 
