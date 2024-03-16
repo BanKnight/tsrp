@@ -13,13 +13,22 @@ program.parse();
 
 const options = program.opts() as any
 
-const file = options.config as string
-const content = readFileSync(resolve(file), "utf-8")
-const config = parse(content) as Config
+const file = resolve(options.config as string)
 
-const app = config.mode == "server" ? new ServerApp(config) : new ClientApp(config)
+try {
+    const content = readFileSync(file, "utf-8")
+    const config = parse(content) as Config
 
-app.start()
+    const app = config.mode == "server" ? new ServerApp(config) : new ClientApp(config)
+
+    app.start()
+}
+catch (e: any) {
+    console.error("start error")
+    console.error(e)
+    process.exit(1)
+}
+
 
 
 
