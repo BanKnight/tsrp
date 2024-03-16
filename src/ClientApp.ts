@@ -248,7 +248,7 @@ export class ClientApp {
         target.connect(channel.config.clientPort, channel.config.clientHost, () => {
             connected = true
             flushTarget()
-            console.log("udp connected", channel.config.clientPort, channel.config.clientHost)
+            console.log(shadow.socket, "udp connected", channel.config.clientPort, channel.config.clientHost)
         })
 
         let recvTime = Date.now()
@@ -295,6 +295,11 @@ export class ClientApp {
 
         const destroy = () => {
 
+            if (timer) {
+                clearInterval(timer)
+                timer = undefined
+            }
+
             channel.socks.delete(shadow.socket)
 
             session.send({
@@ -309,9 +314,10 @@ export class ClientApp {
             shadow.emit("close")
 
             if (connected) {
-                connected = false
                 target.close()
             }
+
+            connected = false
         }
 
         target.once("close", destroy)

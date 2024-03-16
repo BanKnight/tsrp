@@ -125,13 +125,14 @@ export class ServerApp {
         server.on("connection", (socket: Socket & { id: number }) => {
 
             count++
-            console.log(count, "new tcp connection", socket.remoteAddress, socket.remotePort)
 
             socket.setKeepAlive(true)
             // socket.setNoDelay(true)
             socket.setTimeout(1000 * 3600)
 
             socket.id = info.socket * 10000000 + (++idHelper % 10000000)
+
+            console.log(count, socket.id, "new tcp connection", info.port, socket.remoteAddress, socket.remotePort)
 
             const shadow = shadows[socket.id] = new ShadowSocket(session)
             shadow.socket = socket.id
@@ -174,7 +175,7 @@ export class ServerApp {
 
             socket.once("close", () => {
                 count--
-                console.log(count, "close tcp connection", socket.remoteAddress, socket.remotePort)
+                console.log(count, socket.id, "close tcp connection", socket.remoteAddress, socket.remotePort)
             })
 
             const destroy = () => {
@@ -258,9 +259,10 @@ export class ServerApp {
             }
 
             count++
-            console.log(count, "new udp connection,count:", remote_info.address, remote_info.port)
 
             const id = info.socket * 10000000 + (++idHelper % 10000000)
+
+            console.log(id, "new udp connection", info.port, "from", remote_info.address, remote_info.port)
 
             shadow = shadows[id] = remotes[address] = new ShadowSocket(session)
 
