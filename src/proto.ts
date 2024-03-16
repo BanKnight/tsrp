@@ -63,7 +63,7 @@ export const Resp = Types.Struct()
     .define("body", Types.Json())
 
 export const Packet = Types.Struct()
-    .define("index", Types.UInt32BE())
+    // .define("index", Types.UInt32BE())
     .define("cmd", Types.UInt8())
     .select("cmd", {
         0x01: ["body", Send],

@@ -209,7 +209,7 @@ export class Session extends EventEmitter {
             return
         }
 
-        context.write = context.read
+        // context.write = context.read
     }
 
     call(info: { func: string, body: any }) {

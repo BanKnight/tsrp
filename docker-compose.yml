@@ -8,3 +8,4 @@ services:
     volumes:
       - ./client.yaml:/app/config.yaml:ro
       - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone
