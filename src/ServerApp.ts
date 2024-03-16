@@ -128,8 +128,8 @@ export class ServerApp {
             console.log(count, "new tcp connection", socket.remoteAddress, socket.remotePort)
 
             socket.setKeepAlive(true)
-            socket.setNoDelay(true)
-            socket.setTimeout(3000)
+            // socket.setNoDelay(true)
+            socket.setTimeout(1000 * 3600)
 
             socket.id = info.socket * 10000000 + (++idHelper % 10000000)
 

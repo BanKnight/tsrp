@@ -113,7 +113,6 @@ console.log("client host", proxy.clientHost, "random count is:", maxCount)
         })
 
         client.setKeepAlive(true)
-        client.setNoDelay(true)
     }
 
     setInterval(() => {

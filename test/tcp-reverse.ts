@@ -48,7 +48,6 @@ console.log("client host", proxy.clientHost, "random count is:", maxCount)
         console.log(index, "new connection", clientCount, client.remoteAddress, client.remotePort)
 
         client.setKeepAlive(true)
-        client.setNoDelay(true)
 
         client.on("data", (data) => {
             totalCount += data.length
@@ -78,7 +77,6 @@ console.log("client host", proxy.clientHost, "random count is:", maxCount)
             let index = i + 1
 
             client.setKeepAlive(true)
-            client.setNoDelay(true)
 
             // console.log(index, "connected", client.remoteAddress, client.remotePort)
 

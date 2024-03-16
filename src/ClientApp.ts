@@ -28,7 +28,7 @@ export class ClientApp {
         })
 
         socket.setKeepAlive(true)
-        socket.setNoDelay(true)
+        // socket.setNoDelay(true)
 
         const destroy = () => {
             socket.destroySoon()

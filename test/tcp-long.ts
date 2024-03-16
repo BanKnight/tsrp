@@ -44,7 +44,6 @@ const maxClient = 50
         console.log(index, "new connection", clientCount, client.remoteAddress, client.remotePort)
 
         client.setKeepAlive(true)
-        client.setNoDelay(true)
 
         client.on("data", (data) => {
             totalCount += data.length
@@ -74,7 +73,6 @@ const maxClient = 50
             let index = i + 1
 
             client.setKeepAlive(true)
-            client.setNoDelay(true)
 
             // console.log(index, "connected", client.remoteAddress, client.remotePort)
 
