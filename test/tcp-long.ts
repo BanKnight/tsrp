@@ -80,14 +80,14 @@ const maxClient = 50
 
             //@ts-ignore
             setInterval(() => {
-                const len = Math.floor(Math.random() * every) + 100
+                const len = Math.floor(Math.random() * every) + 1000
                 const buffer = Buffer.alloc(len, (97 + index) % 255)
 
                 client.write(buffer)
 
                 sent += len
                 totalSent += len
-            }, 100)
+            }, 10)
 
             client.on("data", (data) => {
                 recv += data.length
@@ -98,6 +98,6 @@ const maxClient = 50
     }
 
     setInterval(() => {
-        console.log("client:", "totalSent:", totalSent, "totalRecv:", totalRecv)
+        console.log("client:", "totalSent:", totalSent, "totalRecv:", totalRecv, "sub", totalSent - totalRecv)
     }, 2000)
 }

@@ -89,7 +89,7 @@ console.log("client host", proxy.clientHost, "random count is:", maxCount)
                     return
                 }
 
-                const len = Math.min(Math.floor(Math.random() * every), maxCount - sent)
+                const len = Math.min(Math.floor(Math.random() * every) + 1, maxCount - sent)
 
                 const buffer = Buffer.alloc(len, (97 + index) % 255)
                 client.write(buffer)
