@@ -4,5 +4,6 @@ services:
     image: ghcr.io/banknight/tsrp
     container_name: tsrp
     restart: always
+    network_mode: host
     ports:
       - 8024:8024
