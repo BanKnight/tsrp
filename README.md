@@ -15,7 +15,7 @@ docker run --restart=always --network host -d -v ${PWD}/server.yaml:/app/config.
 客户端
 docker run --restart=always --network host -d -v ${PWD}/client.yaml:/app/config.yaml --name tsrpc ghcr.io/banknight/tsrp:master
 ```
-## 也可以用 docker compose
+## 或者 docker compose 部署
 ``` yaml
 version: '3'
 services:
